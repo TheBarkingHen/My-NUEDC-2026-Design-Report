@@ -1,0 +1,435 @@
+\documentclass[zihao=-4,fontset=none]{ctexart}
+
+% --- 基础宏包 ---
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{fancyhdr}
+
+\setCJKmainfont{SimSun}[AutoFakeBold=3]
+\geometry{a4paper, left=2.5cm, right=2.5cm, top=3cm, bottom=2.5cm}
+\setlength{\baselineskip}{22pt}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    filecolor=magenta,      
+    urlcolor=blue,
+    citecolor=black,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\rfoot{\thepage}
+
+% --- 代码块样式 ---
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+\begin{document}
+
+\begin{center}
+    \huge \bfseries 全国大学生电子设计竞赛设计报告说明 \\
+    \vspace{0.3cm}
+    \Large 2015年B题——风力摆控制系统
+    \vspace{0.5cm}
+\end{center}
+
+\section*{摘要}
+\begin{quote}
+    \noindent
+    \textcolor{red}{（1）一句话点题，说明你所设计的系统以及所包含的主要模块。}
+    
+    采用MK60FX512单片机作为主控模块，设计了主要包含角度监测模块、直流风机驱动模块、声光提示模块和电源模块的风力摆控制系统。
+    
+    \vspace{0.3cm}
+    \noindent
+    \textcolor{red}{（2）介绍该系统的工作原理（要求重点突出，突出硬件结构、算法的创新或特色）。}
+    
+    通过读取陀螺仪MPU6050的输出数据来获取风力摆的姿态，以计算出摆动幅度和角度，并且采用PID控制技术对电机实现闭环调节。为使风机之间气流串扰减小，利用3D打印技术制作了风机安装托盘。
+    
+    \vspace{0.3cm}
+    \noindent
+    \textcolor{red}{（3）描述系统的测试结果。}
+    
+    经测试，系统可以在13s内由静止开始画出达到要求的线段，幅度和方向可调；拉起摆杆，5s内即可静止；20s内可从静止开始重复3次画出满足要求的圆，所画圆半径可调，受外界风力影响后能迅速恢复。
+    
+    \vspace{0.3cm}
+    \noindent
+    \textcolor{red}{（4）一句话总结该系统符合设计要求。}
+    
+    该系统操作简单，性能可靠，技术指标达到了设计要求，具有良好的人机交互性能。
+    
+    \vspace{0.5cm}
+    \noindent
+    \textcolor{red}{\textbf{注意：} 摘要总字数不能超过300字。}
+\end{quote}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{引言}
+
+题目要求设计实现一个风力摆控制系统，具备以下功能：（1）以直流风机作为动力，风力摆能够快速起摆，且可设置摆动方向和幅度；（2）能够按要求画线段或圆；（3）能够在拉起 $30^\circ \sim 45^\circ$ 时迅速恢复静止；（4）能够在风扇风吹影响后快速恢复画圆状态。
+
+为了设计实现该控制系统的功能，采用模块化设计，通过角度检测模块检测风力摆的姿态，用以对风机进行调节。首先，将陀螺仪检测到的风力摆姿态数据传送到主控制器MK60FX512中，经计算得到风力摆的摆动角度与幅度；然后，采用PID控制技术对电机实现闭环调节，使风力摆按要求摆动。另外，设计中采用了3D打印技术，减小风机之间气流间的串扰。整个设计新颖，充分利用了新兴的技术和手段。
+
+\section{方案论证}
+\textbf{（对应得分点一：系统结构及风力摆运动控制方案论证）}
+
+\subsection{风力摆运动控制方案论证与选择}
+
+由于仅采用风机驱动，为实现题目要求，需要通过控制风机转速来控制风力摆的状态。若仅采用2只直流风机作为动力系统，不易控制，较难完成题目要求，故不予考虑。使用四只直流风机作为动力系统，可选择的方案有：
+
+\textbf{方案一：“十”字形控制。} 轴流风机分别安装在十字形结构四端，给定探杆脱离垂直方向一定角度时，探杆摆动。此时控制摆动方向上对立两个风力机转动，迫使探杆按照要求运动。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.35\textwidth]{cross_control.png}
+    \caption{十字形控制}
+    \label{fig:cross}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.35\textwidth]{cross_line_control.png}
+    \caption{交叉直线控制}
+    \label{fig:cross_line}
+\end{figure}
+
+\textbf{方案二：两条交叉直线方式。} 四只风机仍然按照对立安装的方式。当给探杆脱离垂直方向一定角度时，控制相邻的两个轴流风机转动，迫使探杆按照要求运动。方案设计较方案一复杂，难以实现。
+
+综上比较以上方案，本系统选择方案一。
+
+\subsection{风力摆角度检测模块的论证与选择}
+
+\textbf{方案一：采用WDD35D4角度传感器检测。} 其原理相当于可调电位器，根据旋转角度产生相应的阻值，通过AD转换处理后算出相应的角度。该方案只能测量平面旋转角度，且无法测量旋转加速度。
+
+\textbf{方案二：采用MPU-6050加速度陀螺仪。} 该模块整合了3轴陀螺仪和3轴加速度器，输出六轴旋转矩阵、四元数、欧拉角的融合演算数据，通过处理后可检测到旋转角度及其加速度，测出数据更加精确。
+
+\textbf{选定方案：} 比较两种方案可知MPU-6050可用来精确测量风力摆的当前姿态，实现对风力摆的精确控制，更适合设计要求。因此，选定方案二。
+
+\subsection{电动机选型方案论证}
+
+\textbf{方案一：使用飞卡车模伺服电机。} 该电机具有低转速大惯量，转矩大，起动力矩大的特点。
+
+\textbf{方案二：使用轴流风机。} 该电机的流量大，工作时效率高，并且适用范围广。轴流风机在高速时更加稳定，而且安装方便。
+
+综合比较以上两个方案，本系统选择方案二。
+
+\subsection{控制算法的选择}
+
+\textbf{方案一：采用模糊控制算法。} 模糊控制有许多良好的特性，它不需要事先知道对象的数学模型，具有系统响应快、超调小、过渡过程时间短等优点。但编程复杂，数据处理量大。
+
+\textbf{方案二：采用PID控制算法。} 按比例、积分、微分的函数关系，进行运算，将运算结果用于控制。优点是控制精度高，且算法简单明了。对于本系统的控制已足够精确，节约了单片机的资源和运算时间。
+
+综合比较以上两个方案，本系统选择方案二。
+
+\section{理论分析与计算}
+\textbf{（对应得分点二：风力摆状态测量及运动控制）}
+
+\subsection{风力摆运动控制及算法分析}
+
+设计中风力摆采用4个轴流风机驱动，通过MPU6050采集风力摆的当前状态，经单片机处理并运用PID控制技术调节输出PWM的占空比，控制四只风机的工作状态，从而实现对风力摆的控制。
+
+通过基于姿态解算法采集并计算信息的四元数法，可以弥补通常描述刚体角运动的3个欧拉角参数在设计控制系统时的不足。四元数可以描述一个坐标系或一个矢量相对某一个坐标系的旋转。四元数的标量部分表示了转角的一半余弦值，而其矢量部分则表示瞬时转轴的方向、瞬时转动轴与参考坐标系轴间的方向余弦值。因此，一个四元数既可表示转轴方向，又可表示转角大小。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.4\textwidth]{wind_model.png}
+    \caption{风力摆模型}
+    \label{fig:wind_model}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.4\textwidth]{quaternion_model.png}
+    \caption{四元数法模型}
+    \label{fig:quaternion}
+\end{figure}
+
+假设转角标量和转轴空间向量分别为 $w$、$\vec{v}$（$\vec{v} = x,y,z$），则四元数法表示为：
+\begin{equation}
+    \begin{cases}
+        \psi = \arctan 2(2wz + 2xy,\ 1 - 2y^2 - 2z^2) \\
+        \theta = \arcsin (2wy - 2zx) \\
+        \phi = \arctan 2(2wz + 2yz,\ 1 - 2x^2 - 2y^2)
+    \end{cases} \tag{1}
+\end{equation}
+其中，$\psi$：偏航角（yaw），z轴；$\theta$：仰俯角（pitch），y轴；$\phi$：滚转角（roll），x轴。四元数法所得结果经单片机处理，并运用PID算法来控制风机转速，使得风力摆的运动状态趋向平稳。PID算法控制器由舵机转动角度比例P，角度误差积分I和角度微分D组成。其输入 $e(t)$ 和输出 $U(t)$ 的关系为：
+\begin{equation}
+    U(t) = P\left[e(t) + \frac{1}{I}\int_0^t e(\tau)d\tau + D\frac{de(t)}{dt}\right] \tag{2}
+\end{equation}
+其中，$e(t)$ 为给定值 $r(t)$ 与实际输出值 $c(t)$ 的偏差，即 $e(t) = r(t) - c(t)$。
+
+通过PID控制可以精确调节风力摆的速度和方向。
+
+\subsection{风力摆的测量与计算}
+
+MPU6050集成了3轴陀螺仪和3轴加速度器，可对风力摆状态进行连续采集，得到的高精度数据通过400kHz的I$^2$C接口和设备寄存器之间进行高速通信。MPU6050对陀螺仪和加速度计分别用了三个16位的ADC，将其测量的模拟量转化为可输出的数字量，通过处理器读取测量数据然后输出。运用上述四元数法计算测量的结果，得到风力摆当前状态。
+
+\section{电路与程序设计}
+\textbf{（对应得分点三：系统结构，电路设计）}
+
+\subsection{电路设计}
+
+\subsubsection{系统总体框图}
+
+系统主要由MK60FX512单片机、MPU6050姿态检测、风机驱动、液晶显示、模式选择和电源模块等部分组成。系统总体框图如图 \ref{fig:sys_block} 所示。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.8\textwidth]{system_block.png}
+    \caption{系统总体框图}
+    \label{fig:sys_block}
+\end{figure}
+
+\subsubsection{电源模块的设计}
+
+开关电源直接提供给直流电机的 $+12\mathrm{V}$，本系统采用7.2V电池电源经LM2940和AMS1117稳压芯片，提供5V和3.3V电压。电路如图 \ref{fig:power} 所示。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.7\textwidth]{power.png}
+    \caption{电源模块}
+    \label{fig:power}
+\end{figure}
+
+\subsubsection{姿态检测模块设计}
+
+MPU6050姿态检测模块是用于检测摆杆的状态，INT端口为中断信号输出，通知CPU数据处理完毕，通过I$^2$C读取，如图 \ref{fig:mpu} 所示。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.6\textwidth]{mpu6050.png}
+    \caption{MPU6050原理图}
+    \label{fig:mpu}
+\end{figure}
+
+\subsubsection{电机驱动模块设计}
+
+如图 \ref{fig:hbridge} 所示，当EN为高电平，PWM\_L\_1为高电平，PWM\_L\_2为低电平时，M1和M4 MOS管导通，直流电机正转（反转）；当EN为高电平，PWM\_L\_1为低电平，PWM\_L\_2为高电平时，M2和M3 MOS管导通，直流电机反转（正转）。IR2184S场效应管驱动器HO和LO管脚输出电平总为相反电平，有效避免了H桥驱动电路共态导通的问题，保护了MOS管。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.7\textwidth]{hbridge.png}
+    \caption{H桥驱动原理图}
+    \label{fig:hbridge}
+\end{figure}
+
+\subsection{关键部件的机械设计}
+
+题目要求风力摆能够完成画直线、定点和圆，所以对机械结构要求较高。采用Creator3D打印机打印的支架能够满足需要。支架结构采用十字架的方式，隔离了4个轴流风机之间的影响，提高了风力摆的稳定性，如图 \ref{fig:mech} 所示。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.5\textwidth]{mechanical.png}
+    \caption{风力摆及关键部件机械设计效果图}
+    \label{fig:mech}
+\end{figure}
+
+\subsection{程序设计}
+
+\subsubsection{程序流程图}
+
+系统控制程序包含主程序流程和中断程序流程。通过拨码开关进行直线模式、圆周模式、椭圆模式、其他模式选择。程序流程图如图 \ref{fig:flow} 所示。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.6\textwidth]{flowchart.png}
+    \caption{程序流程图}
+    \label{fig:flow}
+\end{figure}
+
+\subsubsection{程序功能分析}
+
+基于题目要求需要控制风力摆做线性摆动和圆周摆动，圆周摆动可以分解为两个正交轴上的相位相差九十度的线性摆动。
+
+\textbf{线性摆动：} 控制器采集MPU6050的加速度计和陀螺仪值，通过四元数姿态解算出风力摆的角度，利用卡尔曼滤波得到小噪声角度，根据角度和陀螺仪测量的加速度PID控制风机使得风力摆做单摆运动。
+
+\textbf{圆周摆动：} 控制风力摆做两个正交轴上的线性摆动，一个轴的风机极性切换利用陀螺仪的零值，另外一个轴利用角度的零值。即可做到两个轴相位相差九十度。
+
+\section{测试方案与测试结果}
+\textbf{（对应得分点四：测试方法及测试数据）}
+
+\subsection{测试设备及方式}
+
+所用的测试设备有：测试图纸、量角器、直尺、电风扇、风速仪、秒表等。测试方法描述如下：
+
+（1）幅度可控的直线测试。首先给定角度值让激光点靠近目标区域，再细给角度值，让激光点精确落在目标区域的线上；通过多次试验验证在此角度值下直线线性稳定性。
+
+（2）定点测试。人工给风力摆一个角度，同时秒表计时，测试至静止的时间，根据时间再来调PWM直至在规定时间内恢复到静止。
+
+（3）圆周测试。首先给定某个参数，让风力摆作圆周运动，观察激光点的轨迹在测试图纸上的偏移量，根据偏移量的大小重新矫正参数。
+
+\subsection{测试数据}
+
+（1）驱动风力摆工作，使激光笔稳定地在地面画出一条长度不短于50cm的直线段，来回五次，记录其由静止至开始自由摆时间及最大偏差距离。测试结果如表 \ref{tab:line1} 所示。
+
+\begin{table}[H]
+    \centering
+    \caption{静止开始画直线测试数据}
+    \label{tab:line1}
+    \begin{tabular}{cccc}
+        \toprule
+         & 时长（s） & 测试结果（cm） & 误差（cm） \\
+        \midrule
+        第一次测试 & 12.88 & 51.4 & 1.4 \\
+        第二次测试 & 12.76 & 51.2 & 1.2 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+（2）设置风力摆画线长度，驱动风力摆工作，记录其由静止至开始自由摆时间及在画不同长度直线时的最大偏差距离。测试结果如表 \ref{tab:line2} 所示。
+
+\begin{table}[H]
+    \centering
+    \caption{规定画线长度测试数据}
+    \label{tab:line2}
+    \begin{tabular}{cccc}
+        \toprule
+        设定长度 & 时间（s） & 长度误差（cm） & 线性误差（cm） \\
+        \midrule
+        30cm & 7.56 & 1.1 & 0.5 \\
+        40cm & 8.79 & 1.4 & 0.7 \\
+        50cm & 10.15 & 1.9 & 0.9 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+（3）设置风力摆自由摆时角度，驱动风力摆工作，记录其由静止至开始自由摆时间及在画不同角度直线时的最大偏差距离。测试结果如表 \ref{tab:angle} 所示。
+
+\begin{table}[H]
+    \centering
+    \caption{规定自由摆初始角度测试数据}
+    \label{tab:angle}
+    \begin{tabular}{ccccc}
+        \toprule
+        角度 & 时间（s） & 长度误差（cm） & 线性误差（cm） & 角度误差（°） \\
+        \midrule
+        0°直线 & 7.87 & 1.2 & 0.6 & 2 \\
+        90°直线 & 7.67 & 1.1 & 0.5 & 1 \\
+        180°直线 & 7.75 & 1.1 & 0.6 & 1 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+（4）将风力摆拉起一定角度放开，驱动风力摆工作，测试风力摆制动达到静止状态所用时间。测试结果如表 \ref{tab:stop} 所示。
+
+\begin{table}[H]
+    \centering
+    \caption{自由摆动至静止测试数据}
+    \label{tab:stop}
+    \begin{tabular}{cccc}
+        \toprule
+        拉起角度 & 30° & 35° & 40° \\
+        \midrule
+        时间（s） & 3.56 & 3.87 & 4.34 \\
+        误差（cm） & 1.27 & 1.42 & 1.39 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\section{结论}
+
+本次设计采用模块化思想，先后完成了姿态检测、电机驱动、模式选择和电源电路等模块的设计，整个风力摆控制系统较好地完成了题目的基本要求，实现了线性摆动和圆周摆动。在此基础上，进一步完成了题目的发挥部分，即限定时间、限定区域的重复画圆功能。通过分析和实验，发现影响风力摆的稳定性和控制精度的主要因素是风机之间的气流串扰。为有效减少风机之间气流串扰影响，采用3D打印技术制作了ABS风机安装托盘，将风机相互隔离，从而有效地提高了控制精度。系统的测试数据表明，设计方案合理可行，系统运行可靠。
+
+\section*{附录}
+
+附录：附整体硬件原理图、主要源程序清单、实物图，等等。
+
+\section*{其他注意事项}
+
+\subsection*{1. 设计报告写作装订要求}
+
+本次设计报告写作说明的要求依据2023年全国大学生电子设计竞赛的要求，竞赛设计报告要求如下：
+
+参赛学生在撰写《设计报告》时应注意，报告封面及每页纸上均不得出现参赛队的学校、代码、姓名等文字，否则取消评审资格，因此，不需要对老师和同学进行致谢。
+
+报告正文长度严格限制为A4纸8页以内，首页另附300字以内的设计报告摘要。正文采用小四号宋体字，行距固定值22磅（其中公式和插图需要修改为单倍行距），章节标题采用小三号黑体，纵向打印。《设计报告》每页上方必须留出3cm以上空白，空白区域内不得有任何文字，每页右下端注明页码。
+
+建议英文采用Times New Roman，一级标题黑体小三，二级标题黑体四号，三级标题黑体小四，表图中字号五号。
+
+\subsection*{2. 设计报告密封要求}
+
+竞赛结束之际，各参赛队应将设计报告密封纸（空白A4纸）在距设计报告上端约2cm处装订，然后将参赛队的代码（代码由赛区组委会统一编制，开赛前通知各队）写在设计报告密封纸（空白A4纸）距离上纸边约1cm居中处，掀起密封纸折向设计报告背面，用胶水粘在背面。
+
+\subsection*{3. 进一步说明}
+
+\begin{enumerate}
+    \item 框图和流程图用Visio画；
+    \item 公式用MathType编辑或Office自带的；
+    \item 软件主流程图要有死循环；
+    \item 论文中的数据与实测一致；
+    \item 论文中的科学术语前后一致。
+\end{enumerate}
+
+\subsection*{4. 设计报告得分点对应表}
+
+\begin{table}[H]
+    \centering
+    \caption{测试得分点与设计报告对应点}
+    \label{tab:score}
+    \begin{tabular}{cp{4cm}c}
+        \toprule
+        项目 & 主要内容 & 分数 \\
+        \midrule
+        方案论证 & 系统结构及风力摆运动控制方案论证 & 4 \\
+        测控方法 & 风力摆状态测量及运动控制 & 6 \\
+        系统设计 & 系统结构，电路设计 & 4 \\
+        系统测试 & 测试方法及测试数据 & 3 \\
+        格式规范 & 设计报告内容完整性，公式、图表的规范性 & 3 \\
+        \bottomrule
+    \end{tabular}
+    \begin{center}
+        \vspace{0.3cm}
+        \begin{tabular}{cc}
+            \toprule
+            设计报告中的对应点 & 分数 \\
+            \midrule
+            2 方案论证与比较 & 4 \\
+            3 系统分析及风力摆角度计算 & 6 \\
+            4 系统设计 & 4 \\
+            5 测试方案及结果分析 & 3 \\
+            摘要 & 3 \\
+            \bottomrule
+        \end{tabular}
+    \end{center}
+\end{table}
+
+\vspace{1cm}
+\begin{center}
+    以上内容仅供参考，不足之处敬请批评指正，致谢安徽赛区电赛组委会！ \\[0.5cm]
+    安工程电赛教练组 \quad 2020.6
+\end{center}
+
+\end{document}
