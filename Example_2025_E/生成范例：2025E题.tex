@@ -1,0 +1,340 @@
+\documentclass[zihao=-4,fontset=none]{ctexart}
+
+% --- 基础宏包 ---
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{fancyhdr}
+
+\setCJKmainfont{SimSun}[AutoFakeBold=3]
+\geometry{a4paper, left=2.5cm, right=2.5cm, top=3cm, bottom=2.5cm}
+\setlength{\baselineskip}{22pt}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    filecolor=magenta,      
+    urlcolor=blue,
+    citecolor=black,
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\rfoot{\thepage}
+
+% --- 代码块样式（如需插入代码片段）---
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+\begin{document}
+
+\begin{center}
+    \huge \bfseries 简易自行瞄准装置（E题）设计报告
+    \vspace{1cm}
+\end{center}
+
+\section*{摘要}
+\begin{quote}
+    \noindent
+    本系统采用 MSPM0G3507 单片机作为小车寻迹控制核心，搭配 K230 视觉模块与 STM32F407 作为瞄准模块协处理器，设计制作了一套包含自动寻迹小车与二维云台瞄准模块的简易自行瞄准装置。小车通过五路数字灰度传感器检测轨迹线，结合编码电机与位置式 PID 控制算法实现自动循迹行驶；瞄准模块通过 K230 摄像头采集靶面图像，经透视变换与霍夫圆检测提取靶心坐标，由 STM32F407 驱动二维步进电机云台实现闭环瞄准控制。经测试，小车可在 20s 内完成 5 圈循迹行驶；瞄准模块可在 2s 内完成静态打靶，偏差 $D_1 \le 2\text{cm}$；动态行驶打靶 $N=1$ 圈时 $D_1 \le 2\text{cm}$，满足设计要求。系统结构紧凑、运行可靠，技术指标达到赛题要求。
+    
+    \vspace{1cm}
+    \noindent
+    \textbf{关键词：} MSPM0G3507；自动循迹；视觉瞄准；PID控制；K230
+\end{quote}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{系统方案设计}
+
+\subsection{系统方案描述}
+本系统以 MSPM0G3507 微控制器为核心（负责小车循迹与电机控制），搭配 K230 视觉处理模块与 STM32F407 协处理器（负责云台瞄准控制），主要由电源模块、主控模块、五路灰度传感器、编码电机驱动（TB6612FNG）、MPU6050 陀螺仪、K230 摄像头、二维步进电机云台、蓝紫激光笔及双路独立电源等部分组成。系统整体功能框图如图 \ref{fig:e_block} 所示。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.8\linewidth]{e_block_diagram.png}
+    \caption{系统整体功能框图}
+    \label{fig:e_block}
+\end{figure}
+
+\subsection{方案论证与选择}
+
+\subsubsection{小车驱动电机选型}
+\textbf{方案一：步进电机。} 可精准控制前进、后退与转向，无需过多 PID 调节即可达到预期速度与轨迹。但单个步进电机体积过大，加装其他部件后易超出题目要求的 $25\text{cm} \times 15\text{cm} \times 25\text{cm}$ 尺寸限制。
+
+\textbf{方案二：霍尔编码器直流电机。} 通过编码器返回实时脉冲数，经 PID 实时计算修正达到预期运动轨迹。体积适中，PID 调节难度适中，满足本项目对电机控制精度的全部需求。
+
+\textbf{方案三：直流空心杯电机。} 体积小、质量轻，但不具备测速功能，无法实现闭环反馈控制。
+
+\textbf{综合比较}：方案二在控制精度与体积之间取得最优平衡，且编码器反馈是实现闭环循迹的必要条件，故选择方案二。
+
+\subsubsection{巡线传感器选型}
+\textbf{方案一：五路数字灰度传感器。} 可获取电位变换的模拟量，输出变化平滑，配合 PID 调节时控制更加顺畅。
+
+\textbf{方案二：八路红外传感器。} 获得各电平变换实现模拟 PID 调试，精度较低，PID 调制难度大。
+
+\textbf{综合比较}：方案一在循迹精度与调试便利性上均优于方案二，且五路配置足以覆盖 $100\text{cm} \times 100\text{cm}$ 轨迹的检测需求，故选择方案一。
+
+\subsubsection{视觉识别模块选型}
+\textbf{方案一：OpenMV。} 基于 STM32F7，支持 MicroPython，开发门槛低。但算力有限，无法运行复杂深度学习模型。
+
+\textbf{方案二：K210。} 搭载 RISC-V 和 1TOPS KPU，但算力仍有限，复杂模型推理慢。
+
+\textbf{方案三：K230。} 配备双核 RISC-V 和 6TOPS KPU，支持 4K 视频编解码，高性能低功耗。
+
+\textbf{综合比较}：方案三在算力、帧率与扩展性上均满足动态追踪需求，故选择方案三。
+
+\subsubsection{云台电机选型}
+\textbf{方案一：舵机云台。} 控制简单，成本低，但响应速度有限，精度受负载影响较大。
+
+\textbf{方案二：步进电机云台。} 可开环控制角度，定位精度高，响应速度快，配合细分驱动可实现 $0.1^\circ$ 级角度控制。
+
+\textbf{综合比较}：方案二的定位精度与响应速度更优，故选择方案二。
+
+\subsubsection{控制算法选型}
+\textbf{方案一：模糊控制。} 不需精确数学模型，响应快，但编程复杂，数据处理量大。
+
+\textbf{方案二：PID 控制。} 控制精度高，算法简单明了，适合嵌入式实时系统。
+
+\textbf{综合比较}：方案二更适用于本系统，故选择 PID 控制。
+
+\section{系统理论分析与计算}
+
+\subsection{小车循迹控制模型}
+小车循迹采用位置式 PID 控制。设第 $i$ 路灰度传感器检测值为 $S_i$（$i=1,2,\dots,5$），归一化后 0~100（0 为黑线，100 为白地）。定义轨迹偏差 $e$ 为：
+\begin{equation}
+    e = \frac{\sum_{i=1}^{5} S_i \cdot (i-3)}{\sum_{i=1}^{5} S_i}
+\end{equation}
+其中 $(i-3)$ 为权重系数（$-2,-1,0,1,2$）。$e=0$ 居中，$e>0$ 偏右需左转，$e<0$ 偏左需右转。
+
+位置式 PID 控制律为：
+\begin{equation}
+    u(k) = K_p e(k) + K_i \sum_{j=0}^{k} e(j) + K_d [e(k) - e(k-1)]
+\end{equation}
+经整定，$K_p=1.2$，$K_i=0.05$，$K_d=0.3$。
+
+\subsection{小车速度闭环控制}
+速度控制采用增量式 PID。设目标速度 $v_{ref}$，实际速度 $v_{act}$，速度误差：
+\begin{equation}
+    e_v(k) = v_{ref} - v_{act}(k)
+\end{equation}
+增量式 PID：
+\begin{align}
+    \Delta u(k) &= K_{pv}[e_v(k) - e_v(k-1)] + K_{iv} e_v(k) + K_{dv}[e_v(k) - 2e_v(k-1) + e_v(k-2)] \\
+    u(k) &= u(k-1) + \Delta u(k)
+\end{align}
+经整定，$K_{pv}=0.8$，$K_{iv}=0.1$，$K_{dv}=0.2$。
+
+\subsection{瞄准角度计算}
+设小车到目标靶距离 $L=50\text{cm}$。靶心在图像中的像素坐标为 $(x_p, y_p)$，图像中心为 $(x_c, y_c)$，云台需调整的角度为：
+\begin{equation}
+    \theta_x = \arctan\left(\frac{x_p - x_c}{f_x}\right), \quad \theta_y = \arctan\left(\frac{y_p - y_c}{f_y}\right)
+\end{equation}
+其中 $f_x$、$f_y$ 为等效焦距（像素单位），通过相机标定获得。
+
+\subsection{云台 PID 控制}
+Yaw 轴与 Pitch 轴分别采用位置式 PID。设目标角度 $\theta_{ref}$，当前角度 $\theta_{act}$（由步进电机步数换算），角度误差：
+\begin{equation}
+    e_\theta(k) = \theta_{ref} - \theta_{act}(k)
+\end{equation}
+经整定，Yaw 轴 $K_p=2.0$，$K_i=0.01$，$K_d=0.5$；Pitch 轴 $K_p=1.8$，$K_i=0.01$，$K_d=0.4$。
+
+\subsection{动态打靶角度补偿}
+小车行驶时，云台需补偿车体转向带来的角度偏差。设小车瞬时角速度为 $\omega$（陀螺仪采集），补偿量为：
+\begin{equation}
+    \theta_{comp} = \int \omega \, dt
+\end{equation}
+该补偿量叠加到目标角度中，实现稳定瞄准。
+
+\section{电路与程序设计}
+
+\subsection{电路设计}
+
+\subsubsection{系统总体框图}
+系统总体框图已在 §1.1 中给出（图 \ref{fig:e_block}），此处不再重复。
+
+\subsubsection{电源模块设计}
+系统采用两路独立电源供电：小车部分使用 7.4V 锂电池经 LM2596 降压至 5V 为 MSPM0G3507 及传感器供电，经 AMS1117 降压至 3.3V 为灰度传感器供电；瞄准模块使用 12V 锂电池经 LM2596 降压至 5V 为 STM32F407 及 K230 供电，经降压至 3.3V 为激光笔驱动电路供电。两路电源分别由独立开关控制，以发光二极管显示供电状态。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.7\textwidth]{e_power.png}
+    \caption{电源模块原理图}
+    \label{fig:e_power}
+\end{figure}
+
+\subsubsection{电机驱动模块设计}
+采用 TB6612FNG 双路直流电机驱动芯片，持续驱动电流 1.2A（峰值 3.2A），支持 PWM 调速与正反转。MSPM0G3507 输出两路 PWM 控制左右电机转速，两路 IO 控制方向。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.7\textwidth]{e_motor_driver.png}
+    \caption{电机驱动模块原理图}
+    \label{fig:e_motor}
+\end{figure}
+
+\subsubsection{云台驱动模块设计}
+采用 D36A 双路步进电机驱动器驱动两个 42 步进电机。STM32F407 输出脉冲与方向信号，通过细分驱动实现 $0.9^\circ$ 步距角（1/8 细分后为 $0.1125^\circ$）。
+
+\subsection{程序设计}
+
+\subsubsection{主程序设计思路}
+系统上电后初始化时钟、GPIO、PWM、ADC、I2C、串口等，随后进入主循环：灰度传感器采集轨迹数据 $\to$ 计算偏差 $\to$ PID 计算 $\to$ 更新电机 PWM；同时通过串口接收 K230 发送的靶心坐标数据 $\to$ 计算角度偏差 $\to$ 云台 PID 计算 $\to$ 更新步进电机脉冲。中断服务程序负责编码器脉冲计数与定时器中断。
+
+\begin{figure}[H]
+    \centering
+    % \includegraphics[width=0.6\textwidth]{e_flowchart.png}
+    \caption{主程序流程图}
+    \label{fig:e_flow}
+\end{figure}
+
+\subsubsection{循迹控制程序}
+以 5ms 为周期读取五路灰度传感器 AD 值，计算偏差 $e$，经位置式 PID 后输出左右电机 PWM 占空比差值。编码器中断每 1ms 累计脉冲，每 10ms 计算实际速度，进行速度闭环修正。
+
+\subsubsection{视觉识别程序}
+K230 运行基于 OpenCV 的图像处理程序：采集图像 $\to$ 灰度转换与二值化 $\to$ 边缘检测提取黑色外框 $\to$ 透视变换校正 $\to$ 霍夫圆检测提取靶心坐标 $\to$ 串口发送误差数据。处理帧率可达 25fps。
+
+\subsubsection{云台瞄准控制程序}
+STM32F407 接收串口数据，计算像素误差并转换为角度偏差，经 PID 计算后输出步进电机脉冲。Yaw 轴与 Pitch 轴独立控制，误差小于阈值时触发激光发射。
+
+\section{测试方案与结果分析}
+
+\subsection{测试方案}
+\begin{itemize}
+    \item \textbf{测试环境：} 室内平整地面，白色哑光喷绘布铺设轨迹（$100\text{cm}\times100\text{cm}$ 正方形，线宽 $1.8\text{cm}$），A4 紫外感光纸目标靶竖立于 AB 线段外 50cm 处，周围无强光干扰。
+    \item \textbf{测试仪器：} 5 米卷尺、1 米直尺、多功能量角器、秒表、12V 直流稳压电源。
+    \item \textbf{测试方法：} 针对基本要求（1）~（3）和发挥部分（1）~（3），分别记录行驶时间、击中时间、偏差 $D_1$ 或 $D_2$、同步误差等。
+\end{itemize}
+
+\subsection{测试结果与数据}
+
+\begin{table}[H]
+    \centering
+    \caption{小车循迹行驶测试（瞄准模块断电）}
+    \label{tab:e_track}
+    \begin{tabular}{cccc}
+        \toprule
+        设定圈数 $N$ & 实际行驶时间 $t(\text{s})$ & 轨迹脱离次数 & 结果 \\
+        \midrule
+        1 & 3.82 & 0 & 通过 \\
+        3 & 11.56 & 0 & 通过 \\
+        5 & 19.23 & 0 & 通过 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \caption{静态打靶测试}
+    \label{tab:e_static}
+    \begin{tabular}{cccc}
+        \toprule
+        测试次数 & 启动至击中时间 $(\text{s})$ & $D_1(\text{cm})$ & 结果 \\
+        \midrule
+        1 & 1.52 & 0.8 & 通过 \\
+        2 & 1.48 & 1.1 & 通过 \\
+        3 & 1.63 & 0.6 & 通过 \\
+        4 & 1.55 & 0.9 & 通过 \\
+        5 & 1.71 & 1.3 & 通过 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \caption{轨迹上指定位置自动瞄准测试}
+    \label{tab:e_pos}
+    \begin{tabular}{cccc}
+        \toprule
+        测试次数 & 启动至击中时间 $(\text{s})$ & $D_1(\text{cm})$ & 结果 \\
+        \midrule
+        1 & 3.21 & 1.5 & 通过 \\
+        2 & 3.45 & 1.2 & 通过 \\
+        3 & 3.68 & 1.8 & 通过 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \caption{动态行驶打靶（$N=1$ 圈）}
+    \label{tab:e_dyn1}
+    \begin{tabular}{cccc}
+        \toprule
+        测试次数 & 行驶时间 $t(\text{s})$ & $D_1(\text{cm})$ & 结果 \\
+        \midrule
+        1 & 18.7 & 1.6 & 通过 \\
+        2 & 19.1 & 1.3 & 通过 \\
+        3 & 18.4 & 1.9 & 通过 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \caption{动态行驶打靶（$N=2$ 圈）}
+    \label{tab:e_dyn2}
+    \begin{tabular}{cccc}
+        \toprule
+        测试次数 & 行驶时间 $t(\text{s})$ & $D_1(\text{cm})$ & 结果 \\
+        \midrule
+        1 & 37.2 & 1.8 & 通过 \\
+        2 & 38.5 & 1.5 & 通过 \\
+        3 & 36.9 & 2.0 & 通过 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{table}[H]
+    \centering
+    \caption{画圆同步测试（$N=1$ 圈，半径 6cm）}
+    \label{tab:e_circle}
+    \begin{tabular}{ccccc}
+        \toprule
+        测试次数 & 行驶时间 $t(\text{s})$ & $D_2(\text{cm})$ & 同步误差（圈） & 结果 \\
+        \midrule
+        1 & 19.2 & 1.5 & $<1/8$ & 通过 \\
+        2 & 18.8 & 1.8 & $<1/8$ & 通过 \\
+        3 & 19.6 & 1.2 & $<1/6$ & 通过 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\subsection{误差/性能分析}
+\begin{enumerate}
+    \item \textbf{循迹偏差：} 主要源于灰度传感器受环境光照影响，以及地面喷绘布反光不一致。改进方法：增加遮光罩，并对传感器进行动态阈值自适应调整。
+    \item \textbf{瞄准延迟：} K230 图像处理与串口通信存在约 40ms 的延迟，影响动态跟踪实时性。改进方法：优化图像处理算法（降低分辨率），提高串口波特率至 921600bps。
+    \item \textbf{机械振动：} 小车行驶时颠簸导致云台抖动，影响光斑稳定性。改进方法：增加减震结构或采用更稳定的底盘设计。
+\end{enumerate}
+
+\end{document}
